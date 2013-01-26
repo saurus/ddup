@@ -5,3 +5,6 @@ LDLIBS=-lgobject-2.0 -lgmodule-2.0 -lgthread-2.0 -lrt -lglib-2.0  -lssl -lcrypto
 
 ddup: main.o
 	$(CC) -o ddup main.o $(LDFLAGS) $(LDLIBS)
+
+clean:
+	rm -f *.o *.a ddup

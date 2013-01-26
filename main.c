@@ -25,7 +25,7 @@
 // size of buffer for full compare. the bigger, the better.
 #define COMPARE_BUFFER_SIZE (1024*1024)
 
-// this structure contains all the file the information we need.
+// this structure contains all the file information we need.
 struct filedata;
 struct filedata {
 	long long inode;		// inode number
@@ -42,16 +42,15 @@ struct group_same_size {
 	GHashTable *ht;
 };
 
-
 // from "man bash", QUOTING section:
-//    Enclosing characters in double quotes preserves the literal value of all 
-//    characters within the quotes, with the exception of $, , \, and, when 
-//    history expansion is enabled, !. The  characters  $ and   retain their 
-//    special meaning within double quotes. The backslash retains its special 
+//    Enclosing characters in double quotes preserves the literal value of all
+//    characters within the quotes, with the exception of $, , \, and, when
+//    history expansion is enabled, !. The  characters  $ and   retain their
+//    special meaning within double quotes. The backslash retains its special
 //    meaning only when followed by one of the following characters: $, , ", \,
-//    or <newline>.  A double quote may be quoted within double quotes by 
-//    preceding it with a backslash. If enabled, history expansion will be 
-//    performed unless an !  appearing in double quotes is  escaped  using  a  
+//    or <newline>.  A double quote may be quoted within double quotes by
+//    preceding it with a backslash. If enabled, history expansion will be
+//    performed unless an !  appearing in double quotes is  escaped  using  a
 //    backslash. The backslash preceding the !  is not removed.
 static char *quote_filename(char *name, char *outbuf, int buflen)
 {
