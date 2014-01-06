@@ -1,4 +1,5 @@
-#define _BSD_SOURCE 1
+// for strdup
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,6 +9,8 @@
 #include <openssl/md5.h>
 #include <unistd.h>
 #include <glib.h>
+
+#include "format.h"
 
 // if open flag for no atime impact is not defined, define it as no-op
 #ifndef O_NOATIME
@@ -52,7 +55,7 @@ struct group_same_size {
 //    preceding it with a backslash. If enabled, history expansion will be
 //    performed unless an !  appearing in double quotes is  escaped  using  a
 //    backslash. The backslash preceding the !  is not removed.
-static char *quote_filename(char *name, char *outbuf, int buflen)
+static char *quote_filename(const char *name, char *outbuf, int buflen)
 {
 	int i = 0, j = 0;
 	
@@ -157,6 +160,70 @@ static void calc_md5(struct filedata *fd)
         return;
 }
 
+static char *output_format = "ln -f \"%quoted_equalto_name.\" \"%quoted_name.\" # %inode.\t%size.\t%md5start.\n";
+
+//			printf("ln -f \"%s\" \"%s\" # %lld\t%lld\t%s\n", 
+//			       quote_filename(fd->equalto->name, outbuf, 2*FILENAME_LENGTH+2), 
+//			       quote_filename(fd->name, outbuf, 2*FILENAME_LENGTH+2), 
+//			       fd->inode, fd->size, fd->md5start);
+
+static int copy_string(char *output, size_t size, const char *source, int doQuote)
+{
+	if (doQuote) {
+		if (quote_filename(source, output, size) == NULL)
+			return -1;
+		return strlen(output);
+	} else {
+		size_t len = strlen(source);
+		if (len >= size)
+			return -1;
+		strcpy(output, source);
+		return len;
+	}
+}
+
+static int copy_int(char *output, size_t size, int value)
+{
+	int len = snprintf(output, size, "%d", value);
+
+	if (len >= size)
+		return -1;
+	return len; 
+}
+
+static int fdResolver(const char *name, char *output, size_t size, void *resolverData)
+{
+	struct filedata *fd = (struct filedata *)resolverData;
+	const char *n = name;
+	int doQuote = 0;
+
+	if (strncmp(n, "quoted_", 7) == 0) {
+		doQuote = 1;
+		n += 7;
+	}
+
+	if (strncmp(n, "equalto_", 8) == 0) {
+		fd = fd->equalto;
+		n += 8;
+	}
+
+	if (strcmp(n, "name") == 0)
+		return copy_string(output, size, fd->name, doQuote); 
+	
+	if (strcmp(n, "inode") == 0)
+		return copy_int(output, size, fd->inode);
+		
+	if (strcmp(n, "size") == 0)
+		return copy_int(output, size, fd->size);
+	
+	if (strcmp(n, "md5start") == 0)
+		return copy_string(output, size, fd->md5start, doQuote); 
+
+	fprintf(stderr, "ERROR: requested to resolve unknown name: \"%s\" (reduced to \"%s\")\n", name, n);
+
+	return -1;
+}
+
 // callback called for every element in the hash table indexed by
 // md5sum hash: if there is more than one file, checks if is really
 // the same file. 
@@ -183,16 +250,24 @@ static void do_hashes(G_GNUC_UNUSED gpointer key, gpointer value, G_GNUC_UNUSED 
 		}
 	}
 	
-	char outbuf[2*FILENAME_LENGTH+2];
 	for (unsigned int i = 0; i < arr->len; i++)
 	{
 		struct filedata *fd = g_array_index(arr, struct filedata *, i);
 		
-		if (fd->equalto != NULL)
-			printf("ln -f \"%s\" \"%s\" # %lld\t%lld\t%s\n", 
-			       quote_filename(fd->equalto->name, outbuf, 2*FILENAME_LENGTH+2), 
-			       quote_filename(fd->name, outbuf, 2*FILENAME_LENGTH+2), 
-			       fd->inode, fd->size, fd->md5start);
+		if (fd->equalto != NULL) {
+			char output[10240];
+
+			int len = vsnformat(output, 10240, output_format, fdResolver, fd);
+
+			if (len < 0)
+				printf("output too long...\n");
+			else
+				fputs(output, stdout);
+//			printf("ln -f \"%s\" \"%s\" # %lld\t%lld\t%s\n", 
+//			       quote_filename(fd->equalto->name, outbuf, 2*FILENAME_LENGTH+2), 
+//			       quote_filename(fd->name, outbuf, 2*FILENAME_LENGTH+2), 
+//			       fd->inode, fd->size, fd->md5start);
+		}
 	}
 }
 
@@ -233,13 +308,36 @@ static void dump_array(G_GNUC_UNUSED gpointer key, gpointer value, G_GNUC_UNUSED
 //   of the first bytes, and create a hash table indexed by md5.
 // - when more than one file with the same md5 if found, do a full compare
 //   to check if are really the same file.
-int main(void)
+int main(int argc, char **argv)
 {
 	char name[FILENAME_LENGTH];
 	struct stat st;
 	GHashTable *htInodes = g_hash_table_new(NULL, NULL);
 	GHashTable *htSize = g_hash_table_new(NULL, NULL);
 	struct filedata fd;
+
+	for (char **a = (argv+1); *a != NULL; a++) {
+		if (strcmp(*a, "-h") == 0) {
+			printf ("usage:\n    ddup [-f formatstring] [-testformat]\n");
+			return 0;
+		}
+		if (strcmp(*a, "-testformat") == 0) {
+			testFormat(stdin);
+			return 0;
+		}
+		if (strcmp(*a, "-f") == 0) {
+			if (*(++a) == NULL) {
+				fprintf(stderr, "ERROR: option '-f' must be followed by a format string.\n");
+				return 1;
+			}
+
+			int len = strlen(*a);
+			output_format = malloc(len + 2);
+			strcpy(output_format, *a);
+			output_format[len] = '\n';
+			output_format[len+1] = '\0';
+		}
+	}
 	
 	while (fgets(name, FILENAME_LENGTH, stdin)) {
 		int len = strlen(name);

@@ -1,7 +1,9 @@
 ddup: Detect duplicate files.
 ====
 
-This simple utility reads from stdin a list of filenames, and check for duplicates files (i.e. with the same content). The output is a list of "ln -f" commands.
+This simple utility reads from stdin a list of filenames, and check for duplicates files (i.e. with the same content). 
+
+The default output is a list of "ln -f" commands, but it can be changed using the '-f' option and adding a new format string.
 
 This program does not writes any change to disk.
 
