@@ -26,3 +26,10 @@ the algorithm is:
 - when more than one file with the same md5 if found, do a full compare to check if are really the same file.
 - for every file marked as a duplicate of another, write a "ln -f" command to standard output.
 
+Other tools
+-----------
+
+There are two simple scripts:
+- rmlinked: recursively remove files with more than one hard link. useful after applying the output of "ddup", to remove duplicates on the 
+            directory you don't want to keep.
+- recrmdir: recursively remove all the empty directories. useful after running "rmlinked".

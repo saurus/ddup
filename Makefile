@@ -12,3 +12,5 @@ clean:
 install: ddup
 	cp ddup $(BINDIR)
 	cp rmlinked $(BINDIR)
+	cp recrmdir $(BINDIR)
+
