@@ -1,0 +1,11 @@
+#!/bin/sh
+echo "rmlinked: delete files with more than one hard link"
+echo "          (useful to remove duplicates after using ddup)"
+echo ""
+echo -n "you are in `pwd` direcory. Are you sure do you want to continue? "
+read x
+if [ x$x == xy ]; then
+    find . -type f -links +1 -exec rm -f \{\} \;
+else
+    echo aborted.
+fi
