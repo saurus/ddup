@@ -45,6 +45,15 @@ struct group_same_size {
 	GHashTable *ht;
 };
 
+// default formatting output
+static char *output_format = "ln -f \"%quoted_equalto_name.\" \"%quoted_name.\" # %inode.\t%size.\t%md5start.\n";
+
+// how many records we got.
+static unsigned long count;
+
+// dump a simple status report
+static int dostatus;
+
 // from "man bash", QUOTING section:
 //    Enclosing characters in double quotes preserves the literal value of all
 //    characters within the quotes, with the exception of $, , \, and, when
@@ -160,8 +169,6 @@ static void calc_md5(struct filedata *fd)
         return;
 }
 
-static char *output_format = "ln -f \"%quoted_equalto_name.\" \"%quoted_name.\" # %inode.\t%size.\t%md5start.\n";
-
 //			printf("ln -f \"%s\" \"%s\" # %lld\t%lld\t%s\n", 
 //			       quote_filename(fd->equalto->name, outbuf, 2*FILENAME_LENGTH+2), 
 //			       quote_filename(fd->name, outbuf, 2*FILENAME_LENGTH+2), 
@@ -274,10 +281,12 @@ static void do_hashes(G_GNUC_UNUSED gpointer key, gpointer value, G_GNUC_UNUSED 
 // callback called for every element in the hash table indexed by file size.
 // if there is more than one element, calculates the (partial) md5sum and
 // fills the hash table indexed by md5. 
+unsigned long int count_dumps, last_count_dumps;
 static void dump_array(G_GNUC_UNUSED gpointer key, gpointer value, G_GNUC_UNUSED gpointer user_data)
 {
 	struct group_same_size *g = (struct group_same_size *)value;
 	
+	count_dumps++;
 	if (g->arr->len < 2)
 		return;  // nothing to see here, move along...
 	
@@ -299,6 +308,13 @@ static void dump_array(G_GNUC_UNUSED gpointer key, gpointer value, G_GNUC_UNUSED
 	}
 	
 	g_hash_table_foreach(g->ht, do_hashes, NULL);
+	
+	if (dostatus) {
+	    if (count_dumps - last_count_dumps >= count / 1000) {
+		last_count_dumps = count_dumps;
+		fprintf(stderr, " %7lu", count_dumps);
+	    }
+	}
 }
 
 // how this works:
@@ -318,7 +334,7 @@ int main(int argc, char **argv)
 
 	for (char **a = (argv+1); *a != NULL; a++) {
 		if (strcmp(*a, "-h") == 0) {
-			printf ("usage:\n    ddup [-f formatstring] [-testformat]\n");
+			printf ("usage:\n    ddup [-f formatstring] [-testformat] [-t]\n");
 			return 0;
 		}
 		if (strcmp(*a, "-testformat") == 0) {
@@ -337,6 +353,9 @@ int main(int argc, char **argv)
 			output_format[len] = '\n';
 			output_format[len+1] = '\0';
 		}
+		
+		if (strcmp(*a, "-t") == 0)
+		    dostatus = 1;
 	}
 	
 	while (fgets(name, FILENAME_LENGTH, stdin)) {
@@ -384,13 +403,18 @@ int main(int argc, char **argv)
 			g_hash_table_insert(htSize, (gpointer)fd.size, g);
 		}
 		g_array_append_val(g->arr, fd);
-		
+		count++;
 		
 	}
-	fprintf(stderr, "DEBUG: done, do dump...\n");
+	unsigned int ss = g_hash_table_size(htSize);
+	fprintf(stderr, "DEBUG: done reading %lu files (hash table size %u), do dump...\n", count, ss);
 	// dump
+	count = ss;
     
 	g_hash_table_foreach(htSize, dump_array, NULL);
+	
+	if (dostatus)
+	    fprintf(stderr, "\n");
 	
 	return 0;
 }

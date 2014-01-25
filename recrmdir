@@ -1,2 +1,2 @@
-$!/bin/sh
+#!/bin/sh
 find . -type d -depth -exec rmdir \{\} \;
